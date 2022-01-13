@@ -1,0 +1,17 @@
+{
+  "name": "Gotify",
+  "keywords": "esp8266, esp32, Gotify",
+  "description": "Simple Gotify library for ESP8266 / ESP32",
+  "authors":
+  {
+    "name": "Olivier Perron"
+  },
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/freeasabeer/Gotify.git"
+  },
+  "version": "0.1.0",
+  "frameworks": "arduino",
+  "platforms": ["espressif8266", "espressif32"]
+}
