@@ -1,16 +1,31 @@
 #include <Arduino.h>
 //#include "Print.h"
 #include <String.h>
+#if defined (ESP32)
+  #include <freertos/FreeRTOS.h>
+#elif defined (ARDUINO_ARCH_RP2040)
+  #include <FreeRTOS.h>
+  #include <semphr.h>
+#else
+#pragma message("No mutex support")
+#endif
 
 class Gotify//: public Print
 {
 public:
-  Gotify(String server, String key);
+#if defined(ESP32)
+  Gotify(String server, String key, bool serial_fallback = false, bool use_mutex = false, const char* CAcert = NULL);
+#endif
+  Gotify(WiFiClient &client, String server, String key, bool serial_fallback = false, bool use_mutex = false, bool https = false);
   void title(String title);
   void title(const char *title);
   bool send(String title, String msg, int priority = 5);
+#if defined(ESP32)
   void begin(unsigned long baud, uint32_t config = 134217756U, int8_t rxPin = (int8_t)(-1), int8_t txPin = (int8_t)(-1), bool invert = false, unsigned long timeout_ms = 20000UL);
-
+#elif defined(ESP8266)
+  void begin(uint32_t baud);//, SoftwareSerialConfig config = SWSERIAL_8N1);
+#endif
+  void isConnectedCB(bool (*cb)());
 /*
   size_t write(uint8_t);
   size_t write(const uint8_t *buffer, size_t size);
@@ -81,4 +96,14 @@ private:
   String _server;
   String _key;
   String _title;
+  bool _serial_fallback;
+  bool _use_mutex;
+  const char * _cacert;
+#if defined(ESP32)
+  volatile SemaphoreHandle_t _SafeSerialSemaphore = nullptr;
+#endif
+  bool _debug = true;
+  WiFiClient* _client = nullptr;
+  bool _https;
+  bool (*_cb)() = nullptr;
 };
