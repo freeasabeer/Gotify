@@ -3,23 +3,21 @@
 #include <String.h>
 #if defined (ESP32)
   #include <freertos/FreeRTOS.h>
-  #include <HTTPClient.h>
+  //#include <HTTPClient.h>
 #elif defined (ARDUINO_ARCH_RP2040)
   #include <FreeRTOS.h>
   #include <semphr.h>
-  #include <HTTPClient.h>
+  //#include <HTTPClient.h>
 #elif defined(ESP8266)
 #pragma message("No mutex support")
-  #include <ESP8266HTTPClient.h>
+  //#include <ESP8266HTTPClient.h>
 #endif
+#include <ArduinoHttpClient.h>
 
 class Gotify//: public Print
 {
 public:
-#if defined(ESP32)
-  Gotify(String server, String key, bool serial_fallback = false, bool use_mutex = false, const char* CAcert = NULL);
-#endif
-  Gotify(WiFiClient &client, String server, String key, bool serial_fallback = false, bool use_mutex = false, bool https = false);
+  Gotify(Client &client, String server, String key, bool serial_fallback = false, bool use_mutex = false);
   void title(String title);
   void title(const char *title);
   bool send(String title, String msg, int priority = 5);
@@ -98,7 +96,7 @@ public:
 private:
   bool httpbegin();
   String _server;
-  String _key;
+  String _URLPath;
   String _title;
   bool _serial_fallback;
   bool _use_mutex;
@@ -107,9 +105,8 @@ private:
   volatile SemaphoreHandle_t _SafeSerialSemaphore = nullptr;
 #endif
   bool _debug = true;
-  WiFiClient* _client = nullptr;
-  bool _https;
+  Client *_client = nullptr;
   bool (*_cb)() = nullptr;
-  HTTPClient _http;
+  HttpClient *_http = nullptr;
   int _port = 0;
 };

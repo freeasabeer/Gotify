@@ -1,44 +1,30 @@
+/*
 #if defined (ESP32)
   #include <WiFi.h>
-  #include <HTTPClient.h>
 #elif defined (ESP8266)
   #include <ESP8266WiFi.h>
-  #include <ESP8266HTTPClient.h>
 #endif
+*/
+#include <Client.h>
+#include <ArduinoHttpClient.h>
+
 #include "Gotify.h"
 
-#if defined(ESP32)
-Gotify::Gotify(String server, String key, bool serial_fallback, bool use_mutex, const char* CAcert) {
-  _server = server;
-  _key = key;
-  _title = String("");
-  _serial_fallback = serial_fallback;
-  _cacert = CAcert;
-  _use_mutex = use_mutex;
-
-  if (use_mutex) {
-    _SafeSerialSemaphore = xSemaphoreCreateMutex();  // Create a mutex semaphore we will use to manage the Serial Port
-    if ( ( _SafeSerialSemaphore ) != NULL )
-      xSemaphoreGive( ( _SafeSerialSemaphore ) );  // Make the Serial Port available for use, by "Giving" the Semaphore.
-  }
-}
-#endif
-
-Gotify::Gotify(WiFiClient &client, String server, String key, bool serial_fallback, bool use_mutex, bool https) {
+Gotify::Gotify(Client &client, String server, String key, bool serial_fallback, bool use_mutex) {
   _client = &client;
-  _server = server;
-  _key = key;
+  _URLPath = "/message?token="+key;
   _title = String("");
   _serial_fallback = serial_fallback;
-  _https = https;
   _use_mutex = use_mutex;
   const char *s = server.c_str();
   char *c = strchr(s, ':');
   if (c) {
-    c++;
+    *c++ = 0;
+    _server = String(s);
     _port = strtol(c, NULL, 10);
   } else {
-    _port = _https?443:80;
+    _server = server;
+    _port = 80;
   }
 #if defined(ESP32)
   if (use_mutex) {
@@ -61,26 +47,14 @@ void Gotify::begin(uint32_t baud) {
 }
 #endif
 bool Gotify::httpbegin() {
-  bool res;
-  _http.setReuse(true);
+  bool res = true;
 
-#if defined(ESP32)
-  if (_client) {
-#endif
-    if (_https)
-      res = _http.begin(*_client, _server, _port, String("/message?token=")+_key, true);
-    else
-      res = _http.begin(*_client, _server, _port, String("/message?token=")+_key, false);
-#if defined(ESP32)
-  } else {
-    if (_cacert)
-      res = _http.begin(String("https://")+_server+String("/message?token=")+_key, _cacert);
-    else
-      res = _http.begin(String("http://")+_server+String("/message?token=")+_key);
-  }
-#endif
-  if (!res)
-    Serial.println("http.begin failed");
+  if(_http)
+    delete _http;
+
+  _http = new HttpClient(*_client, _server, _port);
+
+  _http->connectionKeepAlive();
 
   return res;
 }
@@ -111,13 +85,6 @@ bool Gotify::send(String title, String msg, int priority) {
       }
       return false;
     }
-  } else {
-    if (!WiFi.isConnected()) {
-      if (this->_serial_fallback) {
-        Serial.println(msg);
-      }
-      return false;
-    }
   }
 
   // Build the message
@@ -128,17 +95,18 @@ bool Gotify::send(String title, String msg, int priority) {
   String jsonMsg = "{\"message\": \""+msg+"\",\"title\": \""+((title=="")?this->_title:title)+"\",\"priority\": 5}";
   if (_debug) Serial.println("JSON message: "+jsonMsg);
 
-  _http.addHeader("Content-Type", "application/json");
-
+  const char *contentType = "application/json";
   int httpResponseCode;
   int i = 0;
   do {
-  httpResponseCode = _http.POST(jsonMsg);
+  //_http->post(String("/message?token=")+_key, contentType, jsonMsg);
+  _http->startRequest(_URLPath.c_str(), HTTP_METHOD_POST, contentType, jsonMsg.length(), (const byte *)jsonMsg.c_str());
+  httpResponseCode = _http->responseStatusCode();
   if(httpResponseCode>0) {
-    String response = _http.getString();
+    String response = _http->responseBody();
     if (_debug) {
       Serial.println(httpResponseCode);
-      Serial.println(response);
+      //Serial.println(response);
     }
     status = true;
   } else {
@@ -151,7 +119,6 @@ bool Gotify::send(String title, String msg, int priority) {
     }
     status = false;
     if (_debug) Serial.println("Restarting http");
-    _http.end();
     httpbegin();
     i++;
   }
