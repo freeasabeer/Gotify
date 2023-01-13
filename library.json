@@ -13,16 +13,5 @@
   },
   "version": "0.4.0",
   "frameworks": "arduino",
-  "platforms": ["espressif8266", "espressif32"],
-  "dependencies": [
-    {
-      "owner": "arduino-libraries",
-      "name": "ArduinoHttpClient",
-      "version": "^0.4.0"
-    },
-    {
-      "name": "SSLClient",
-      "version": "https://github.com/govorox/SSLClient#3042e45"
-    }
-  ]
+  "platforms": ["espressif8266", "espressif32"]
 }

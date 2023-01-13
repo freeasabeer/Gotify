@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <WiFi.h>
-#include <WiFiClientSecure.h>
+#include <SSLClient.h>
 #include "Gotify.h"
 
 // Put here the Root CA certificates of your Gotify server
@@ -47,8 +47,9 @@ umlpkAFJQvZ+Sa2rSdjynrTDedjQIv3s1jH2Tvao5fR23tW2XAQhVg==
 -----END CERTIFICATE-----
 )CERT";
 
-WiFiClientSecure sclient;
-Gotify Gotify(sclient, "192.168.1.17:8099", "Your_Gotify_Key", false, false, true);
+WiFiClient client;
+SSLClient sclient(client);
+Gotify Gotify(sclient, "192.168.1.17:8433", "Your_Gotify_Key");
 #define Serial Gotify // Hijack the Serial link !!! Warning: not all methods of Serial are yet supported
 
 void setup()

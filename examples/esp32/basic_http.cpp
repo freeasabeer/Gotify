@@ -1,9 +1,9 @@
 #include <Arduino.h>
-#include <ESP8266WiFi.h>
+#include <WiFi.h>
 #include "Gotify.h"
 
 WiFiClient client;
-Gotify Gotify(client, "192.168.1.17:8099", "Your_Gotify_Key");
+Gotify Gotify(client, "192.168.1.17:8080", "Your_Gotify_Key");
 #define Serial Gotify // Hijack the Serial link !!! Warning: not all methods of Serial are yet supported
 
 void setup()

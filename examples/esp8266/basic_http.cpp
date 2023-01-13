@@ -1,19 +1,14 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
-#include <WiFiClientSecure.h>
 #include "Gotify.h"
 
-uint8_t serverfingerprint[] = {0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA};
-WiFiClientSecure sclient;
-Gotify Gotify(sclient, "192.168.1.17:8099", "Your_Gotify_Key", false, false, true);
+WiFiClient client;
+Gotify Gotify(client, "192.168.1.17:8080", "Your_Gotify_Key");
 #define Serial Gotify // Hijack the Serial link !!! Warning: not all methods of Serial are yet supported
 
 void setup()
 {
   // put your setup code here, to run once:
-  sclient.setFingerprint(serverfingerprint);
-  // Alternatively, you can disable the fingerprint check:
-  // sclient.setInsecure();
   Gotify.title("The default Gotify title for notifications");
   Serial.begin(115200);
   Serial.printf("\n");

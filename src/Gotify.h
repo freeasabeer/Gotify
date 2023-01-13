@@ -1,19 +1,14 @@
 #include <Arduino.h>
-//#include "Print.h"
 #include <String.h>
 #if defined (ESP32)
   #include <freertos/FreeRTOS.h>
-  //#include <HTTPClient.h>
 #elif defined (ARDUINO_ARCH_RP2040)
   #include <FreeRTOS.h>
   #include <semphr.h>
-  //#include <HTTPClient.h>
 #elif defined(ESP8266)
-#pragma message("No mutex support")
-  //#include <ESP8266HTTPClient.h>
+  #pragma message("No mutex support")
 #endif
-#include <ArduinoHttpClient.h>
-
+#include <Client.h>
 class Gotify//: public Print
 {
 public:
@@ -94,19 +89,16 @@ public:
   size_t println(void);
 
 private:
-  bool httpbegin();
   String _server;
   String _URLPath;
   String _title;
   bool _serial_fallback;
   bool _use_mutex;
-  const char * _cacert;
 #if defined(ESP32)
   volatile SemaphoreHandle_t _SafeSerialSemaphore = nullptr;
 #endif
-  bool _debug = true;
+  bool _debug = false;
   Client *_client = nullptr;
   bool (*_cb)() = nullptr;
-  HttpClient *_http = nullptr;
   int _port = 0;
 };

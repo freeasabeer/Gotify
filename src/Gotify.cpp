@@ -1,13 +1,3 @@
-/*
-#if defined (ESP32)
-  #include <WiFi.h>
-#elif defined (ESP8266)
-  #include <ESP8266WiFi.h>
-#endif
-*/
-#include <Client.h>
-#include <ArduinoHttpClient.h>
-
 #include "Gotify.h"
 
 Gotify::Gotify(Client &client, String server, String key, bool serial_fallback, bool use_mutex) {
@@ -38,26 +28,12 @@ Gotify::Gotify(Client &client, String server, String key, bool serial_fallback, 
 #if defined(ESP32)
 void Gotify::begin(unsigned long baud, uint32_t config, int8_t rxPin, int8_t txPin, bool invert, unsigned long timeout_ms) {
   Serial.begin(baud, config, rxPin, txPin, invert, timeout_ms);
-  httpbegin();
 }
 #elif defined(ESP8266)
 void Gotify::begin(uint32_t baud) {
   Serial.begin(baud);
-  httpbegin();
 }
 #endif
-bool Gotify::httpbegin() {
-  bool res = true;
-
-  if(_http)
-    delete _http;
-
-  _http = new HttpClient(*_client, _server, _port);
-
-  _http->connectionKeepAlive();
-
-  return res;
-}
 
 void Gotify::isConnectedCB(bool (*cb)()) {
   _cb = cb;
@@ -87,6 +63,15 @@ bool Gotify::send(String title, String msg, int priority) {
     }
   }
 
+  if (!_client->connected()) {
+    _client->stop();
+    Serial.println("Reconnect to server");
+    if (!_client->connect(_server.c_str(), _port)) {
+      Serial.println("Connection to "+_server+":"+String(_port)+" failed!");
+      return false;
+    }
+  }
+
   // Build the message
   msg.replace("\n", "\\u000A");
   msg.replace("\r", "");
@@ -95,37 +80,62 @@ bool Gotify::send(String title, String msg, int priority) {
   String jsonMsg = "{\"message\": \""+msg+"\",\"title\": \""+((title=="")?this->_title:title)+"\",\"priority\": 5}";
   if (_debug) Serial.println("JSON message: "+jsonMsg);
 
-  const char *contentType = "application/json";
-  int httpResponseCode;
-  int i = 0;
-  do {
-  //_http->post(String("/message?token=")+_key, contentType, jsonMsg);
-  _http->startRequest(_URLPath.c_str(), HTTP_METHOD_POST, contentType, jsonMsg.length(), (const byte *)jsonMsg.c_str());
-  httpResponseCode = _http->responseStatusCode();
-  if(httpResponseCode>0) {
-    String response = _http->responseBody();
-    if (_debug) {
-      Serial.println(httpResponseCode);
-      //Serial.println(response);
-    }
-    status = true;
-  } else {
-    if (_debug) {
-      Serial.print("Error on sending POST: ");
-      Serial.println(httpResponseCode);
-    }
-    if (this->_serial_fallback) {
-      Serial.println(msg);
-    }
-    status = false;
-    if (_debug) Serial.println("Restarting http");
-    httpbegin();
-    i++;
-  }
-  } while((httpResponseCode <0)&&(i<5));
-  //http.end();
+    _client->println("POST "+_URLPath+" HTTP/1.1");
+    _client->println("Host: "+_server+":"+_port);
+    _client->println("User-Agent: Gotify/1.0.0");
+    //_client->println("Connection: close");
+    _client->println("Content-Type: application/json");
+    _client->println("Content-Length: "+String(jsonMsg.length()));
+    _client->println();
+    _client->write((const byte *)jsonMsg.c_str(), jsonMsg.length());
 
-
+    int returnCode = -1;
+    bool canReuse = true;
+    bool firstline = true;
+    int size =  -1;
+    while (_client->connected()) {
+      if (_client->available()) {
+        String headerLine = _client->readStringUntil('\n');
+        if (firstline) {
+          firstline = false;
+          if(canReuse && headerLine.startsWith("HTTP/1.")) {
+            canReuse = (headerLine[sizeof "HTTP/1." - 1] != '0');
+          }
+          int codePos = headerLine.indexOf(' ') + 1;
+          returnCode = headerLine.substring(codePos, headerLine.indexOf(' ', codePos)).toInt();
+        } else if(headerLine.indexOf(':')) {
+          String headerName = headerLine.substring(0, headerLine.indexOf(':'));
+          String headerValue = headerLine.substring(headerLine.indexOf(':') + 1);
+          headerValue.trim();
+          if(headerName.equalsIgnoreCase("Content-Length")) {
+            size = headerValue.toInt();
+          }
+        }
+        if (headerLine == "\r") {
+          //Serial.println("headers received");
+          break;
+        }
+      }
+    }
+    if (_debug) Serial.println(returnCode);
+    if  (returnCode >0) {
+      status = true;
+      // if there are incoming bytes available
+      // from the server, read them and print them:
+      while (_client->available()) {
+        char c = _client->read();
+        //if (_debug) Serial.write(c);
+      }
+    } else {
+      if (_debug) {
+        Serial.print("Error on sending POST: ");
+        Serial.println(returnCode);
+      }
+      if (_serial_fallback) {
+        Serial.println(msg);
+      }
+      status = false;
+    }
 
 #if defined(ESP32)
   if (_use_mutex)
