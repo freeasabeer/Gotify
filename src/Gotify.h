@@ -3,11 +3,14 @@
 #include <String.h>
 #if defined (ESP32)
   #include <freertos/FreeRTOS.h>
+  #include <HTTPClient.h>
 #elif defined (ARDUINO_ARCH_RP2040)
   #include <FreeRTOS.h>
   #include <semphr.h>
-#else
+  #include <HTTPClient.h>
+#elif defined(ESP8266)
 #pragma message("No mutex support")
+  #include <ESP8266HTTPClient.h>
 #endif
 
 class Gotify//: public Print
@@ -93,6 +96,7 @@ public:
   size_t println(void);
 
 private:
+  bool httpbegin();
   String _server;
   String _key;
   String _title;
@@ -106,4 +110,6 @@ private:
   WiFiClient* _client = nullptr;
   bool _https;
   bool (*_cb)() = nullptr;
+  HTTPClient _http;
+  int _port = 0;
 };

@@ -32,6 +32,14 @@ Gotify::Gotify(WiFiClient &client, String server, String key, bool serial_fallba
   _serial_fallback = serial_fallback;
   _https = https;
   _use_mutex = use_mutex;
+  const char *s = server.c_str();
+  char *c = strchr(s, ':');
+  if (c) {
+    c++;
+    _port = strtol(c, NULL, 10);
+  } else {
+    _port = _https?443:80;
+  }
 #if defined(ESP32)
   if (use_mutex) {
     _SafeSerialSemaphore = xSemaphoreCreateMutex();  // Create a mutex semaphore we will use to manage the Serial Port
@@ -44,12 +52,38 @@ Gotify::Gotify(WiFiClient &client, String server, String key, bool serial_fallba
 #if defined(ESP32)
 void Gotify::begin(unsigned long baud, uint32_t config, int8_t rxPin, int8_t txPin, bool invert, unsigned long timeout_ms) {
   Serial.begin(baud, config, rxPin, txPin, invert, timeout_ms);
+  httpbegin();
 }
 #elif defined(ESP8266)
 void Gotify::begin(uint32_t baud) {
   Serial.begin(baud);
+  httpbegin();
 }
 #endif
+bool Gotify::httpbegin() {
+  bool res;
+  _http.setReuse(true);
+
+#if defined(ESP32)
+  if (_client) {
+#endif
+    if (_https)
+      res = _http.begin(*_client, _server, _port, String("/message?token=")+_key, true);
+    else
+      res = _http.begin(*_client, _server, _port, String("/message?token=")+_key, false);
+#if defined(ESP32)
+  } else {
+    if (_cacert)
+      res = _http.begin(String("https://")+_server+String("/message?token=")+_key, _cacert);
+    else
+      res = _http.begin(String("http://")+_server+String("/message?token=")+_key);
+  }
+#endif
+  if (!res)
+    Serial.println("http.begin failed");
+
+  return res;
+}
 
 void Gotify::isConnectedCB(bool (*cb)()) {
   _cb = cb;
@@ -64,7 +98,6 @@ void Gotify::title(const char *title) {
 
 bool Gotify::send(String title, String msg, int priority) {
   bool status;
-  HTTPClient http;
 
 #if defined(ESP32)
   if (_use_mutex)
@@ -95,27 +128,14 @@ bool Gotify::send(String title, String msg, int priority) {
   String jsonMsg = "{\"message\": \""+msg+"\",\"title\": \""+((title=="")?this->_title:title)+"\",\"priority\": 5}";
   if (_debug) Serial.println("JSON message: "+jsonMsg);
 
-#if defined(ESP32)
-  if (_client) {
-#endif
-    if (_https)
-      http.begin(*_client, this->_server, 443, String("/message?token=")+this->_key, true);
-    else
-      http.begin(*_client, this->_server, 80, String("/message?token=")+this->_key, false);
-#if defined(ESP32)
-  } else {
-    if (_cacert)
-      http.begin(String("https://")+this->_server+String("/message?token=")+this->_key, _cacert);
-    else
-      http.begin(String("http://")+this->_server+String("/message?token=")+this->_key);
-  }
-#endif
-  http.addHeader("Content-Type", "application/json");
+  _http.addHeader("Content-Type", "application/json");
 
-  int httpResponseCode = http.POST(jsonMsg);
-
+  int httpResponseCode;
+  int i = 0;
+  do {
+  httpResponseCode = _http.POST(jsonMsg);
   if(httpResponseCode>0) {
-    String response = http.getString();
+    String response = _http.getString();
     if (_debug) {
       Serial.println(httpResponseCode);
       Serial.println(response);
@@ -130,8 +150,13 @@ bool Gotify::send(String title, String msg, int priority) {
       Serial.println(msg);
     }
     status = false;
+    if (_debug) Serial.println("Restarting http");
+    _http.end();
+    httpbegin();
+    i++;
   }
-  http.end();
+  } while((httpResponseCode <0)&&(i<5));
+  //http.end();
 
 
 
