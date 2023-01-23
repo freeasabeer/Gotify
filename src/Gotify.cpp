@@ -57,7 +57,8 @@ bool Gotify::send(String title, String msg, int priority) {
   if (_cb) {
     if (!_cb()) {
       if (this->_serial_fallback) {
-        Serial.println(msg);
+        if (_debug) Serial.println("No ntwk connection");
+        if (_serial_fallback) Serial.println(msg);
       }
       return false;
     }
@@ -65,10 +66,13 @@ bool Gotify::send(String title, String msg, int priority) {
 
   if (!_client->connected()) {
     _client->stop();
-    Serial.println("Reconnect to server");
+    if (_debug) Serial.println("Reconnect to server");
     if (!_client->connect(_server.c_str(), _port)) {
       Serial.println("Connection to "+_server+":"+String(_port)+" failed!");
+      if (_serial_fallback) Serial.println(msg);
       return false;
+    } else {
+      if (_debug) Serial.println("OK");
     }
   }
 
